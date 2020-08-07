@@ -23,11 +23,6 @@ const (
 	maxMessageSize = 512
 )
 
-var (
-	newline = []byte{'\n'}
-	space   = []byte{' '}
-)
-
 var upgrader = websocket.Upgrader{
 	ReadBufferSize:  1024,
 	WriteBufferSize: 1024,
@@ -44,6 +39,8 @@ type Client struct {
 	send chan Message
 
 	ID int
+
+	PlayerCircle PlayerCircle
 }
 
 // readPump pumps messages from the websocket connection to the hub.
@@ -69,6 +66,9 @@ func (c *Client) readPump() {
 			break
 		}
 		log.Println("Received: ", message)
+
+		c.PlayerCircle = message.PlayerCircle
+
 		c.hub.broadcast <- message
 	}
 }
@@ -90,6 +90,7 @@ func (c *Client) writePump() {
 			c.conn.SetWriteDeadline(time.Now().Add(writeWait))
 			if !ok {
 				// The hub closed the channel.
+				log.Println("Send close message to client: ", c.ID)
 				c.conn.WriteMessage(websocket.CloseMessage, []byte{})
 				return
 			}
@@ -122,7 +123,25 @@ func serveWs(hub *Hub, w http.ResponseWriter, r *http.Request) {
 	queryParams := r.URL.Query()
 	clientID, _ := strconv.Atoi(queryParams.Get("id"))
 
-	client := &Client{hub: hub, conn: conn, send: make(chan Message, 256), ID: clientID}
+	initialPlayerCircle := PlayerCircle{
+		PosX:   0,
+		PosY:   0,
+		Width:  20,
+		Height: 20,
+	}
+
+	client := &Client{hub: hub, conn: conn, send: make(chan Message, 256), ID: clientID, PlayerCircle: initialPlayerCircle}
+
+	for otherClient := range hub.clients {
+		// Send current player to all other players
+		message := Message{ClientID: client.ID, PlayerCircle: initialPlayerCircle}
+		otherClient.conn.WriteJSON(message)
+
+		// Send all other players to current player
+		message = Message{ClientID: otherClient.ID, PlayerCircle: otherClient.PlayerCircle}
+		client.conn.WriteJSON(message)
+	}
+
 	client.hub.register <- client
 
 	log.Println("New client: ", client)

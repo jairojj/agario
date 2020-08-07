@@ -1,5 +1,7 @@
 package main
 
+import "log"
+
 // Hub maintains the set of active clients and broadcasts messages to the
 // clients.
 type Hub struct {
@@ -32,6 +34,7 @@ func (h *Hub) run() {
 			h.clients[client] = true
 		case client := <-h.unregister:
 			if _, ok := h.clients[client]; ok {
+				log.Println("Client deregistered: ", client)
 				delete(h.clients, client)
 				close(client.send)
 			}

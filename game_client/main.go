@@ -14,9 +14,6 @@ const (
 	screenHeight = 480
 )
 
-type Game struct {
-}
-
 type PlayerCircle struct {
 	PosX   float64 `json:"pos_x"`
 	PosY   float64 `json:"pos_y"`
@@ -29,6 +26,10 @@ func (p PlayerCircle) String() string {
 	return fmt.Sprint(string(jsonPlayerCircle))
 }
 
+type Game struct {
+	OtherPlayers map[int]PlayerCircle
+}
+
 var playerCircle *PlayerCircle
 var playerMoves chan PlayerCircle
 
@@ -39,13 +40,25 @@ func (g *Game) Update(screen *ebiten.Image) error {
 }
 
 func (g *Game) Draw(screen *ebiten.Image) {
+	// Draw current player
 	circle, _ := ebiten.NewImage(playerCircle.Width, playerCircle.Height, ebiten.FilterDefault)
-	circle.Fill(color.White)
+	circle.Fill(color.RGBA{255, 255, 255, 255})
 
 	op := &ebiten.DrawImageOptions{}
 	op.GeoM.Translate(playerCircle.PosX, playerCircle.PosY)
 
 	screen.DrawImage(circle, op)
+
+	// Draw other players
+	for _, otherPlayerCircle := range g.OtherPlayers {
+		circle, _ := ebiten.NewImage(otherPlayerCircle.Width, otherPlayerCircle.Height, ebiten.FilterDefault)
+		circle.Fill(color.White)
+
+		op := &ebiten.DrawImageOptions{}
+		op.GeoM.Translate(otherPlayerCircle.PosX, otherPlayerCircle.PosY)
+
+		screen.DrawImage(circle, op)
+	}
 }
 
 func (g *Game) Layout(outsideWidth, outsideHeight int) (screenWidth, screenHeight int) {
@@ -55,7 +68,9 @@ func (g *Game) Layout(outsideWidth, outsideHeight int) (screenWidth, screenHeigh
 func main() {
 	playerMoves = make(chan PlayerCircle)
 
-	go startWsClient(playerMoves)
+	game := &Game{OtherPlayers: map[int]PlayerCircle{}}
+
+	go startWsClient(playerMoves, game)
 
 	playerCircle = &PlayerCircle{
 		PosX:   0,
@@ -64,10 +79,11 @@ func main() {
 		Height: 20,
 	}
 
+	ebiten.SetRunnableOnUnfocused(true)
 	ebiten.SetWindowSize(screenWidth, screenHeight)
 	ebiten.SetWindowTitle("AGARIO")
 
-	if err := ebiten.RunGame(&Game{}); err != nil {
+	if err := ebiten.RunGame(game); err != nil {
 		log.Fatal(err)
 	}
 }
