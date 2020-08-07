@@ -1,7 +1,6 @@
 package main
 
 import (
-	"bytes"
 	"log"
 	"net/http"
 	"strconv"
@@ -42,7 +41,7 @@ type Client struct {
 	conn *websocket.Conn
 
 	// Buffered channel of outbound messages.
-	send chan []byte
+	send chan Message
 
 	ID int
 }
@@ -61,15 +60,15 @@ func (c *Client) readPump() {
 	c.conn.SetReadDeadline(time.Now().Add(pongWait))
 	c.conn.SetPongHandler(func(string) error { c.conn.SetReadDeadline(time.Now().Add(pongWait)); return nil })
 	for {
-		_, message, err := c.conn.ReadMessage()
+		message := Message{}
+		err := c.conn.ReadJSON(&message)
 		if err != nil {
 			if websocket.IsUnexpectedCloseError(err, websocket.CloseGoingAway, websocket.CloseAbnormalClosure) {
 				log.Printf("error: %v", err)
 			}
 			break
 		}
-		message = bytes.TrimSpace(bytes.Replace(message, newline, space, -1))
-		log.Println("Message received: ", string(message))
+		log.Println("Received: ", message)
 		c.hub.broadcast <- message
 	}
 }
@@ -95,24 +94,14 @@ func (c *Client) writePump() {
 				return
 			}
 
-			w, err := c.conn.NextWriter(websocket.TextMessage)
-			if err != nil {
-				return
-			}
-			w.Write(message)
-
-			log.Println("Wrinting message: ", string(message))
-
-			// Add queued chat messages to the current websocket message.
-			n := len(c.send)
-			for i := 0; i < n; i++ {
-				w.Write(newline)
-				w.Write(<-c.send)
+			if message.ClientID == c.ID {
+				continue
 			}
 
-			if err := w.Close(); err != nil {
-				return
-			}
+			log.Println("Wrinting: ", message)
+
+			c.conn.WriteJSON(message)
+
 		case <-ticker.C:
 			c.conn.SetWriteDeadline(time.Now().Add(writeWait))
 			if err := c.conn.WriteMessage(websocket.PingMessage, nil); err != nil {
@@ -133,7 +122,7 @@ func serveWs(hub *Hub, w http.ResponseWriter, r *http.Request) {
 	queryParams := r.URL.Query()
 	clientID, _ := strconv.Atoi(queryParams.Get("id"))
 
-	client := &Client{hub: hub, conn: conn, send: make(chan []byte, 256), ID: clientID}
+	client := &Client{hub: hub, conn: conn, send: make(chan Message, 256), ID: clientID}
 	client.hub.register <- client
 
 	log.Println("New client: ", client)

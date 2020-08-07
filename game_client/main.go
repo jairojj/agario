@@ -1,6 +1,7 @@
 package main
 
 import (
+	"encoding/json"
 	"fmt"
 	"image/color"
 	"log"
@@ -17,14 +18,15 @@ type Game struct {
 }
 
 type PlayerCircle struct {
-	posX   float64 `json:"pos_x"`
-	posY   float64 `json:"pos_y"`
-	height int     `json:"height"`
-	width  int     `json:"width"`
+	PosX   float64 `json:"pos_x"`
+	PosY   float64 `json:"pos_y"`
+	Height int     `json:"height"`
+	Width  int     `json:"width"`
 }
 
 func (p PlayerCircle) String() string {
-	return fmt.Sprint(p.posX, p.posY)
+	jsonPlayerCircle, _ := json.Marshal(p)
+	return fmt.Sprint(string(jsonPlayerCircle))
 }
 
 var playerCircle *PlayerCircle
@@ -37,11 +39,11 @@ func (g *Game) Update(screen *ebiten.Image) error {
 }
 
 func (g *Game) Draw(screen *ebiten.Image) {
-	circle, _ := ebiten.NewImage(playerCircle.width, playerCircle.height, ebiten.FilterDefault)
+	circle, _ := ebiten.NewImage(playerCircle.Width, playerCircle.Height, ebiten.FilterDefault)
 	circle.Fill(color.White)
 
 	op := &ebiten.DrawImageOptions{}
-	op.GeoM.Translate(playerCircle.posX, playerCircle.posY)
+	op.GeoM.Translate(playerCircle.PosX, playerCircle.PosY)
 
 	screen.DrawImage(circle, op)
 }
@@ -56,10 +58,10 @@ func main() {
 	go startWsClient(playerMoves)
 
 	playerCircle = &PlayerCircle{
-		posX:   0,
-		posY:   0,
-		width:  20,
-		height: 20,
+		PosX:   0,
+		PosY:   0,
+		Width:  20,
+		Height: 20,
 	}
 
 	ebiten.SetWindowSize(screenWidth, screenHeight)
@@ -74,22 +76,22 @@ func handleInput() {
 	anyKeyPressed := false
 
 	if ebiten.IsKeyPressed(ebiten.KeyW) {
-		playerCircle.posY--
+		playerCircle.PosY--
 		anyKeyPressed = true
 	}
 
 	if ebiten.IsKeyPressed(ebiten.KeyD) {
-		playerCircle.posX++
+		playerCircle.PosX++
 		anyKeyPressed = true
 	}
 
 	if ebiten.IsKeyPressed(ebiten.KeyS) {
-		playerCircle.posY++
+		playerCircle.PosY++
 		anyKeyPressed = true
 	}
 
 	if ebiten.IsKeyPressed(ebiten.KeyA) {
-		playerCircle.posX--
+		playerCircle.PosX--
 		anyKeyPressed = true
 	}
 

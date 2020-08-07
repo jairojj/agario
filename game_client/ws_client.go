@@ -33,12 +33,13 @@ func startWsClient(playerMoves chan PlayerCircle) {
 	go func() {
 		defer close(done)
 		for {
-			_, message, err := c.ReadMessage()
+			message := Message{}
+			err := c.ReadJSON(&message)
 			if err != nil {
 				log.Println("read:", err)
 				return
 			}
-			log.Printf("recv: %s", message)
+			log.Print("recv:", message)
 		}
 	}()
 
@@ -47,8 +48,10 @@ func startWsClient(playerMoves chan PlayerCircle) {
 		case <-done:
 			return
 		case playerCircle := <-playerMoves:
-			log.Println("Sending: ", playerCircle.String())
-			err := c.WriteMessage(websocket.TextMessage, []byte(playerCircle.String()))
+			message := Message{PlayerCircle: playerCircle, ClientID: clientID}
+			log.Println("Sending: ", message)
+
+			err = c.WriteJSON(message)
 			if err != nil {
 				log.Println("write:", err)
 				return
