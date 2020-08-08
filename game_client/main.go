@@ -3,7 +3,6 @@ package main
 import (
 	"encoding/json"
 	"fmt"
-	"image/color"
 	"log"
 
 	"github.com/hajimehoshi/ebiten"
@@ -19,6 +18,7 @@ type PlayerCircle struct {
 	PosY   float64 `json:"pos_y"`
 	Height int     `json:"height"`
 	Width  int     `json:"width"`
+	Color  string  `json:"color"`
 }
 
 func (p PlayerCircle) String() string {
@@ -42,7 +42,7 @@ func (g *Game) Update(screen *ebiten.Image) error {
 func (g *Game) Draw(screen *ebiten.Image) {
 	// Draw current player
 	circle, _ := ebiten.NewImage(playerCircle.Width, playerCircle.Height, ebiten.FilterDefault)
-	circle.Fill(color.RGBA{255, 255, 255, 255})
+	circle.Fill(Colors[playerCircle.Color])
 
 	op := &ebiten.DrawImageOptions{}
 	op.GeoM.Translate(playerCircle.PosX, playerCircle.PosY)
@@ -52,7 +52,7 @@ func (g *Game) Draw(screen *ebiten.Image) {
 	// Draw other players
 	for _, otherPlayerCircle := range g.OtherPlayers {
 		circle, _ := ebiten.NewImage(otherPlayerCircle.Width, otherPlayerCircle.Height, ebiten.FilterDefault)
-		circle.Fill(color.White)
+		circle.Fill(Colors[otherPlayerCircle.Color])
 
 		op := &ebiten.DrawImageOptions{}
 		op.GeoM.Translate(otherPlayerCircle.PosX, otherPlayerCircle.PosY)
@@ -62,7 +62,7 @@ func (g *Game) Draw(screen *ebiten.Image) {
 }
 
 func (g *Game) Layout(outsideWidth, outsideHeight int) (screenWidth, screenHeight int) {
-	return 320, 240
+	return 640, 480
 }
 
 func main() {
@@ -70,13 +70,16 @@ func main() {
 
 	game := &Game{OtherPlayers: map[int]PlayerCircle{}}
 
-	go startWsClient(playerMoves, game)
+	randomColor := getRandomColor()
+
+	go startWsClient(playerMoves, game, randomColor)
 
 	playerCircle = &PlayerCircle{
 		PosX:   0,
 		PosY:   0,
 		Width:  20,
 		Height: 20,
+		Color:  randomColor,
 	}
 
 	ebiten.SetRunnableOnUnfocused(true)
@@ -89,29 +92,45 @@ func main() {
 }
 
 func handleInput() {
-	anyKeyPressed := false
+	hasPlayerMoved := false
 
 	if ebiten.IsKeyPressed(ebiten.KeyW) {
+		if playerCircle.PosY <= 0 {
+			return
+		}
+
 		playerCircle.PosY--
-		anyKeyPressed = true
+		hasPlayerMoved = true
 	}
 
 	if ebiten.IsKeyPressed(ebiten.KeyD) {
+		if playerCircle.PosX+float64(playerCircle.Width) > screenWidth {
+			return
+		}
+
 		playerCircle.PosX++
-		anyKeyPressed = true
+		hasPlayerMoved = true
 	}
 
 	if ebiten.IsKeyPressed(ebiten.KeyS) {
+		if playerCircle.PosY+float64(playerCircle.Height) > screenHeight {
+			return
+		}
+
 		playerCircle.PosY++
-		anyKeyPressed = true
+		hasPlayerMoved = true
 	}
 
 	if ebiten.IsKeyPressed(ebiten.KeyA) {
+		if playerCircle.PosX <= 0 {
+			return
+		}
+
 		playerCircle.PosX--
-		anyKeyPressed = true
+		hasPlayerMoved = true
 	}
 
-	if anyKeyPressed {
+	if hasPlayerMoved {
 		playerMoves <- *playerCircle
 	}
 }

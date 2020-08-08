@@ -12,14 +12,14 @@ import (
 	"github.com/gorilla/websocket"
 )
 
-func startWsClient(playerMoves chan PlayerCircle, game *Game) {
+func startWsClient(playerMoves chan PlayerCircle, game *Game, randomColor string) {
 	rand.Seed(time.Now().UnixNano())
 	clientID := rand.Intn(100)
 
 	interrupt := make(chan os.Signal, 1)
 	signal.Notify(interrupt, os.Interrupt)
 
-	u := url.URL{Scheme: "ws", Host: "localhost:3000", Path: "/ws", RawQuery: fmt.Sprint("id=", clientID)}
+	u := url.URL{Scheme: "ws", Host: "localhost:3000", Path: "/ws", RawQuery: fmt.Sprintf("id=%d&color=%s", clientID, randomColor)}
 	log.Printf("connecting to %s", u.String())
 
 	c, _, err := websocket.DefaultDialer.Dial(u.String(), nil)
@@ -44,7 +44,12 @@ func readMessages(done chan struct{}, c *websocket.Conn, game *Game) {
 			return
 		}
 
-		game.OtherPlayers[message.ClientID] = message.PlayerCircle
+		switch message.Event {
+		case PlayerMoved:
+			game.OtherPlayers[message.ClientID] = message.PlayerCircle
+		case PlayerDisconnected:
+			delete(game.OtherPlayers, message.ClientID)
+		}
 
 		log.Print("recv:", message)
 	}
@@ -56,7 +61,7 @@ func writeMessages(done chan struct{}, c *websocket.Conn, clientID int, interrup
 		case <-done:
 			return
 		case playerCircle := <-playerMoves:
-			message := Message{PlayerCircle: playerCircle, ClientID: clientID}
+			message := Message{PlayerCircle: playerCircle, ClientID: clientID, Event: PlayerMoved}
 			log.Println("Sending: ", message)
 
 			err := c.WriteJSON(message)

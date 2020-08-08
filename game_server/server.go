@@ -52,6 +52,9 @@ func (c *Client) readPump() {
 	defer func() {
 		c.hub.unregister <- c
 		c.conn.Close()
+
+		message := Message{ClientID: c.ID, Event: PlayerDisconnected}
+		c.hub.broadcast <- message
 	}()
 	c.conn.SetReadLimit(maxMessageSize)
 	c.conn.SetReadDeadline(time.Now().Add(pongWait))
@@ -99,7 +102,7 @@ func (c *Client) writePump() {
 				continue
 			}
 
-			log.Println("Wrinting: ", message)
+			log.Println("Writing: ", message)
 
 			c.conn.WriteJSON(message)
 
@@ -128,17 +131,18 @@ func serveWs(hub *Hub, w http.ResponseWriter, r *http.Request) {
 		PosY:   0,
 		Width:  20,
 		Height: 20,
+		Color:  queryParams.Get("color"),
 	}
 
 	client := &Client{hub: hub, conn: conn, send: make(chan Message, 256), ID: clientID, PlayerCircle: initialPlayerCircle}
 
-	for otherClient := range hub.clients {
-		// Send current player to all other players
-		message := Message{ClientID: client.ID, PlayerCircle: initialPlayerCircle}
-		otherClient.conn.WriteJSON(message)
+	// Send current player to all other players
+	message := Message{ClientID: client.ID, PlayerCircle: initialPlayerCircle, Event: PlayerMoved}
+	hub.broadcast <- message
 
+	for otherClient := range hub.clients {
 		// Send all other players to current player
-		message = Message{ClientID: otherClient.ID, PlayerCircle: otherClient.PlayerCircle}
+		message = Message{ClientID: otherClient.ID, PlayerCircle: otherClient.PlayerCircle, Event: PlayerMoved}
 		client.conn.WriteJSON(message)
 	}
 

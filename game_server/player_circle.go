@@ -10,6 +10,7 @@ type PlayerCircle struct {
 	PosY   float64 `json:"pos_y"`
 	Height int     `json:"height"`
 	Width  int     `json:"width"`
+	Color  string  `json:"color"`
 }
 
 func (p PlayerCircle) String() string {
