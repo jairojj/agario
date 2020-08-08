@@ -68,8 +68,6 @@ func (c *Client) readPump() {
 			}
 			break
 		}
-		log.Println("Received: ", message)
-
 		c.PlayerCircle = message.PlayerCircle
 
 		c.hub.broadcast <- message
@@ -102,8 +100,6 @@ func (c *Client) writePump() {
 				continue
 			}
 
-			log.Println("Writing: ", message)
-
 			c.conn.WriteJSON(message)
 
 		case <-ticker.C:
@@ -116,7 +112,7 @@ func (c *Client) writePump() {
 }
 
 // serveWs handles websocket requests from the peer.
-func serveWs(hub *Hub, w http.ResponseWriter, r *http.Request) {
+func serveWs(hub *Hub, w http.ResponseWriter, r *http.Request, consumableSquares *[]ConsumableSquare) {
 	conn, err := upgrader.Upgrade(w, r, nil)
 	if err != nil {
 		log.Println(err)
@@ -145,6 +141,10 @@ func serveWs(hub *Hub, w http.ResponseWriter, r *http.Request) {
 		message = Message{ClientID: otherClient.ID, PlayerCircle: otherClient.PlayerCircle, Event: PlayerMoved}
 		client.conn.WriteJSON(message)
 	}
+
+	//Send current consumable squares when client connects
+	message = Message{ClientID: client.ID, Event: ConsumableSquareChanged, ConsumableSquares: *consumableSquares}
+	client.conn.WriteJSON(message)
 
 	client.hub.register <- client
 

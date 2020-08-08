@@ -14,11 +14,11 @@ const (
 )
 
 type PlayerCircle struct {
-	PosX   float64 `json:"pos_x"`
-	PosY   float64 `json:"pos_y"`
-	Height int     `json:"height"`
-	Width  int     `json:"width"`
-	Color  string  `json:"color"`
+	PosX   float64 `json:"pos_x,omitempty"`
+	PosY   float64 `json:"pos_y,omitempty"`
+	Height int     `json:"height,omitempty"`
+	Width  int     `json:"width,omitempty"`
+	Color  string  `json:"color,omitempty"`
 }
 
 func (p PlayerCircle) String() string {
@@ -27,7 +27,8 @@ func (p PlayerCircle) String() string {
 }
 
 type Game struct {
-	OtherPlayers map[int]PlayerCircle
+	OtherPlayers      map[int]PlayerCircle
+	ConsumableSquares []ConsumableSquare
 }
 
 var playerCircle *PlayerCircle
@@ -59,6 +60,17 @@ func (g *Game) Draw(screen *ebiten.Image) {
 
 		screen.DrawImage(circle, op)
 	}
+
+	// Draw consumable squares
+	for _, consumableSquare := range g.ConsumableSquares {
+		square, _ := ebiten.NewImage(consumableSquare.Width, consumableSquare.Height, ebiten.FilterDefault)
+		square.Fill(Colors[consumableSquare.Color])
+
+		op := &ebiten.DrawImageOptions{}
+		op.GeoM.Translate(consumableSquare.PosX, consumableSquare.PosY)
+
+		screen.DrawImage(square, op)
+	}
 }
 
 func (g *Game) Layout(outsideWidth, outsideHeight int) (screenWidth, screenHeight int) {
@@ -68,7 +80,10 @@ func (g *Game) Layout(outsideWidth, outsideHeight int) (screenWidth, screenHeigh
 func main() {
 	playerMoves = make(chan PlayerCircle)
 
-	game := &Game{OtherPlayers: map[int]PlayerCircle{}}
+	game := &Game{
+		OtherPlayers:      map[int]PlayerCircle{},
+		ConsumableSquares: []ConsumableSquare{},
+	}
 
 	randomColor := getRandomColor()
 

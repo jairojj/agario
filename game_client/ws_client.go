@@ -49,9 +49,9 @@ func readMessages(done chan struct{}, c *websocket.Conn, game *Game) {
 			game.OtherPlayers[message.ClientID] = message.PlayerCircle
 		case PlayerDisconnected:
 			delete(game.OtherPlayers, message.ClientID)
+		case ConsumableSquareChanged:
+			game.ConsumableSquares = message.ConsumableSquares
 		}
-
-		log.Print("recv:", message)
 	}
 }
 
@@ -62,7 +62,6 @@ func writeMessages(done chan struct{}, c *websocket.Conn, clientID int, interrup
 			return
 		case playerCircle := <-playerMoves:
 			message := Message{PlayerCircle: playerCircle, ClientID: clientID, Event: PlayerMoved}
-			log.Println("Sending: ", message)
 
 			err := c.WriteJSON(message)
 			if err != nil {
