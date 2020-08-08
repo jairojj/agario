@@ -1,9 +1,9 @@
 package main
 
 import (
-	"encoding/json"
-	"fmt"
 	"log"
+	"math/rand"
+	"time"
 
 	"github.com/hajimehoshi/ebiten"
 )
@@ -13,40 +13,27 @@ const (
 	screenHeight = 480
 )
 
-type PlayerCircle struct {
-	PosX   float64 `json:"pos_x,omitempty"`
-	PosY   float64 `json:"pos_y,omitempty"`
-	Height int     `json:"height,omitempty"`
-	Width  int     `json:"width,omitempty"`
-	Color  string  `json:"color,omitempty"`
-}
-
-func (p PlayerCircle) String() string {
-	jsonPlayerCircle, _ := json.Marshal(p)
-	return fmt.Sprint(string(jsonPlayerCircle))
-}
-
 type Game struct {
 	OtherPlayers      map[int]PlayerCircle
 	ConsumableSquares []ConsumableSquare
+	MessageQueue      chan Message
+	CurrentPlayerID   int
+	PlayerCircle      *PlayerCircle
 }
 
-var playerCircle *PlayerCircle
-var playerMoves chan PlayerCircle
-
 func (g *Game) Update(screen *ebiten.Image) error {
-	handleInput()
+	g.HandleInput()
 
 	return nil
 }
 
 func (g *Game) Draw(screen *ebiten.Image) {
 	// Draw current player
-	circle, _ := ebiten.NewImage(playerCircle.Width, playerCircle.Height, ebiten.FilterDefault)
-	circle.Fill(Colors[playerCircle.Color])
+	circle, _ := ebiten.NewImage(g.PlayerCircle.Width, g.PlayerCircle.Height, ebiten.FilterDefault)
+	circle.Fill(Colors[g.PlayerCircle.Color])
 
 	op := &ebiten.DrawImageOptions{}
-	op.GeoM.Translate(playerCircle.PosX, playerCircle.PosY)
+	op.GeoM.Translate(g.PlayerCircle.PosX, g.PlayerCircle.PosY)
 
 	screen.DrawImage(circle, op)
 
@@ -78,24 +65,24 @@ func (g *Game) Layout(outsideWidth, outsideHeight int) (screenWidth, screenHeigh
 }
 
 func main() {
-	playerMoves = make(chan PlayerCircle)
+	rand.Seed(time.Now().UnixNano())
 
 	game := &Game{
 		OtherPlayers:      map[int]PlayerCircle{},
 		ConsumableSquares: []ConsumableSquare{},
+		MessageQueue:      make(chan Message),
+		CurrentPlayerID:   rand.Intn(100),
+		PlayerCircle: &PlayerCircle{
+			PosX:   0,
+			PosY:   0,
+			Width:  20,
+			Height: 20,
+			Color:  getRandomColor(),
+			Points: 0,
+		},
 	}
 
-	randomColor := getRandomColor()
-
-	go startWsClient(playerMoves, game, randomColor)
-
-	playerCircle = &PlayerCircle{
-		PosX:   0,
-		PosY:   0,
-		Width:  20,
-		Height: 20,
-		Color:  randomColor,
-	}
+	go game.startWsClient()
 
 	ebiten.SetRunnableOnUnfocused(true)
 	ebiten.SetWindowSize(screenWidth, screenHeight)
@@ -106,46 +93,71 @@ func main() {
 	}
 }
 
-func handleInput() {
+func (g *Game) HandleInput() {
 	hasPlayerMoved := false
 
 	if ebiten.IsKeyPressed(ebiten.KeyW) {
-		if playerCircle.PosY <= 0 {
+		if g.PlayerCircle.PosY <= 0 {
 			return
 		}
 
-		playerCircle.PosY--
+		g.PlayerCircle.PosY--
 		hasPlayerMoved = true
 	}
 
 	if ebiten.IsKeyPressed(ebiten.KeyD) {
-		if playerCircle.PosX+float64(playerCircle.Width) > screenWidth {
+		if g.PlayerCircle.PosX+float64(g.PlayerCircle.Width) > screenWidth {
 			return
 		}
 
-		playerCircle.PosX++
+		g.PlayerCircle.PosX++
 		hasPlayerMoved = true
 	}
 
 	if ebiten.IsKeyPressed(ebiten.KeyS) {
-		if playerCircle.PosY+float64(playerCircle.Height) > screenHeight {
+		if g.PlayerCircle.PosY+float64(g.PlayerCircle.Height) > screenHeight {
 			return
 		}
 
-		playerCircle.PosY++
+		g.PlayerCircle.PosY++
 		hasPlayerMoved = true
 	}
 
 	if ebiten.IsKeyPressed(ebiten.KeyA) {
-		if playerCircle.PosX <= 0 {
+		if g.PlayerCircle.PosX <= 0 {
 			return
 		}
 
-		playerCircle.PosX--
+		g.PlayerCircle.PosX--
 		hasPlayerMoved = true
 	}
 
 	if hasPlayerMoved {
-		playerMoves <- *playerCircle
+		message := Message{ClientID: g.CurrentPlayerID, Event: PlayerMoved, PlayerCircle: *g.PlayerCircle}
+		g.MessageQueue <- message
+
+		g.HandleCollision()
+	}
+}
+
+func (g *Game) HandleCollision() {
+	for i, consumableSquare := range g.ConsumableSquares {
+		if (consumableSquare.PosX >= g.PlayerCircle.PosX &&
+			consumableSquare.PosX <= g.PlayerCircle.PosX+float64(g.PlayerCircle.Width)) &&
+			(consumableSquare.PosY >= g.PlayerCircle.PosY &&
+				consumableSquare.PosY <= g.PlayerCircle.PosY+float64(g.PlayerCircle.Height)) {
+			log.Println("Square consumabled: ", consumableSquare)
+
+			g.ConsumableSquares = append(g.ConsumableSquares[0:i], g.ConsumableSquares[i+1:]...)
+			g.PlayerCircle.Height += consumableSquare.Height
+			g.PlayerCircle.Width += consumableSquare.Width
+			g.PlayerCircle.Points++
+
+			message := Message{ClientID: g.CurrentPlayerID, Event: PlayerMoved, PlayerCircle: *g.PlayerCircle}
+			g.MessageQueue <- message
+
+			message = Message{ClientID: g.CurrentPlayerID, Event: ConsumableSquareChanged, ConsumableSquares: g.ConsumableSquares}
+			g.MessageQueue <- message
+		}
 	}
 }

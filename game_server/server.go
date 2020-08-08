@@ -18,9 +18,6 @@ const (
 
 	// Send pings to peer with this period. Must be less than pongWait.
 	pingPeriod = (pongWait * 9) / 10
-
-	// Maximum message size allowed from peer.
-	maxMessageSize = 512
 )
 
 var upgrader = websocket.Upgrader{
@@ -56,7 +53,6 @@ func (c *Client) readPump() {
 		message := Message{ClientID: c.ID, Event: PlayerDisconnected}
 		c.hub.broadcast <- message
 	}()
-	c.conn.SetReadLimit(maxMessageSize)
 	c.conn.SetReadDeadline(time.Now().Add(pongWait))
 	c.conn.SetPongHandler(func(string) error { c.conn.SetReadDeadline(time.Now().Add(pongWait)); return nil })
 	for {
@@ -68,7 +64,15 @@ func (c *Client) readPump() {
 			}
 			break
 		}
-		c.PlayerCircle = message.PlayerCircle
+
+		log.Println("Received: ", message)
+
+		switch message.Event {
+		case PlayerMoved:
+			c.PlayerCircle = message.PlayerCircle
+		case ConsumableSquareChanged:
+			c.hub.ConsumableSquares = message.ConsumableSquares
+		}
 
 		c.hub.broadcast <- message
 	}
@@ -100,6 +104,8 @@ func (c *Client) writePump() {
 				continue
 			}
 
+			log.Println("Sending: ", message)
+
 			c.conn.WriteJSON(message)
 
 		case <-ticker.C:
@@ -112,7 +118,7 @@ func (c *Client) writePump() {
 }
 
 // serveWs handles websocket requests from the peer.
-func serveWs(hub *Hub, w http.ResponseWriter, r *http.Request, consumableSquares *[]ConsumableSquare) {
+func serveWs(hub *Hub, w http.ResponseWriter, r *http.Request) {
 	conn, err := upgrader.Upgrade(w, r, nil)
 	if err != nil {
 		log.Println(err)
@@ -128,6 +134,7 @@ func serveWs(hub *Hub, w http.ResponseWriter, r *http.Request, consumableSquares
 		Width:  20,
 		Height: 20,
 		Color:  queryParams.Get("color"),
+		Points: 0,
 	}
 
 	client := &Client{hub: hub, conn: conn, send: make(chan Message, 256), ID: clientID, PlayerCircle: initialPlayerCircle}
@@ -143,7 +150,7 @@ func serveWs(hub *Hub, w http.ResponseWriter, r *http.Request, consumableSquares
 	}
 
 	//Send current consumable squares when client connects
-	message = Message{ClientID: client.ID, Event: ConsumableSquareChanged, ConsumableSquares: *consumableSquares}
+	message = Message{ClientID: client.ID, Event: ConsumableSquareChanged, ConsumableSquares: hub.ConsumableSquares}
 	client.conn.WriteJSON(message)
 
 	client.hub.register <- client

@@ -10,7 +10,7 @@ type ConsumableSquare struct {
 	Color  string  `json:"color,omitempty"`
 }
 
-func GenerateConsumableSquares(count int) *[]ConsumableSquare {
+func GenerateConsumableSquares(count int) []ConsumableSquare {
 	consumableSquares := []ConsumableSquare{}
 
 	for i := 0; i < count; i++ {
@@ -23,5 +23,5 @@ func GenerateConsumableSquares(count int) *[]ConsumableSquare {
 		})
 	}
 
-	return &consumableSquares
+	return consumableSquares
 }

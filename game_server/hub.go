@@ -16,14 +16,17 @@ type Hub struct {
 
 	// Unregister requests from clients.
 	unregister chan *Client
+
+	ConsumableSquares []ConsumableSquare
 }
 
-func newHub() *Hub {
+func newHub(consumableSquare []ConsumableSquare) *Hub {
 	return &Hub{
-		broadcast:  make(chan Message),
-		register:   make(chan *Client),
-		unregister: make(chan *Client),
-		clients:    make(map[*Client]bool),
+		broadcast:         make(chan Message),
+		register:          make(chan *Client),
+		unregister:        make(chan *Client),
+		clients:           make(map[*Client]bool),
+		ConsumableSquares: consumableSquare,
 	}
 }
 
