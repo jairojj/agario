@@ -1,11 +1,13 @@
 package main
 
 import (
+	"fmt"
 	"log"
 	"math/rand"
 	"time"
 
 	"github.com/hajimehoshi/ebiten"
+	"github.com/hajimehoshi/ebiten/ebitenutil"
 )
 
 const (
@@ -38,7 +40,9 @@ func (g *Game) Draw(screen *ebiten.Image) {
 	screen.DrawImage(circle, op)
 
 	// Draw other players
-	for _, otherPlayerCircle := range g.OtherPlayers {
+	i := 0
+	for otherPlayerID, otherPlayerCircle := range g.OtherPlayers {
+		i++
 		circle, _ := ebiten.NewImage(otherPlayerCircle.Width, otherPlayerCircle.Height, ebiten.FilterDefault)
 		circle.Fill(Colors[otherPlayerCircle.Color])
 
@@ -46,6 +50,10 @@ func (g *Game) Draw(screen *ebiten.Image) {
 		op.GeoM.Translate(otherPlayerCircle.PosX, otherPlayerCircle.PosY)
 
 		screen.DrawImage(circle, op)
+
+		//Shor other players points
+		otherPlayerPoint := fmt.Sprintf("Player %d - %d", otherPlayerID, otherPlayerCircle.Points)
+		ebitenutil.DebugPrintAt(screen, otherPlayerPoint, screenWidth-100, (i+1)*10)
 	}
 
 	// Draw consumable squares
@@ -58,6 +66,10 @@ func (g *Game) Draw(screen *ebiten.Image) {
 
 		screen.DrawImage(square, op)
 	}
+
+	// Show current player points
+	playerPoints := fmt.Sprintf("Your points %d", g.PlayerCircle.Points)
+	ebitenutil.DebugPrintAt(screen, playerPoints, screenWidth-100, 0)
 }
 
 func (g *Game) Layout(outsideWidth, outsideHeight int) (screenWidth, screenHeight int) {
@@ -158,6 +170,8 @@ func (g *Game) HandleCollision() {
 
 			message = Message{ClientID: g.CurrentPlayerID, Event: ConsumableSquareChanged, ConsumableSquares: g.ConsumableSquares}
 			g.MessageQueue <- message
+
+			break
 		}
 	}
 }
