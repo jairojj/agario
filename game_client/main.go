@@ -21,10 +21,13 @@ type Game struct {
 	MessageQueue      chan Message
 	CurrentPlayerID   int
 	PlayerCircle      *PlayerCircle
+	ThrowableSquares  []*ThrowableSquare
+	MouseClickedAt    time.Time
 }
 
 func (g *Game) Update(screen *ebiten.Image) error {
-	g.HandleInput()
+	g.HandleKeyInput()
+	g.HandleMouseInput()
 
 	return nil
 }
@@ -70,6 +73,37 @@ func (g *Game) Draw(screen *ebiten.Image) {
 	// Show current player points
 	playerPoints := fmt.Sprintf("Your points %d", g.PlayerCircle.Points)
 	ebitenutil.DebugPrintAt(screen, playerPoints, screenWidth-100, 0)
+
+	// Draw throwable squares
+	log.Println(g.ThrowableSquares)
+
+	for _, throwableSquare := range g.ThrowableSquares {
+		if throwableSquare.CurrentX == throwableSquare.DestX && throwableSquare.CurrentY == throwableSquare.DestY {
+			throwableSquare.Reached = true
+			g.ThrowableSquares = append(g.ThrowableSquares[:i], g.ThrowableSquares[i+1:]...)
+			continue
+		}
+
+		square, _ := ebiten.NewImage(throwableSquare.Width, throwableSquare.Height, ebiten.FilterDefault)
+		square.Fill(Colors[throwableSquare.Color])
+
+		op := &ebiten.DrawImageOptions{}
+
+		if throwableSquare.CurrentX < throwableSquare.DestX {
+			throwableSquare.CurrentX++
+		} else if throwableSquare.CurrentX > throwableSquare.DestX {
+			throwableSquare.CurrentX--
+		}
+
+		if throwableSquare.CurrentY < throwableSquare.DestY {
+			throwableSquare.CurrentY++
+		} else if throwableSquare.CurrentY > throwableSquare.DestY {
+			throwableSquare.CurrentY--
+		}
+
+		op.GeoM.Translate(float64(throwableSquare.CurrentX), float64(throwableSquare.CurrentY))
+		screen.DrawImage(square, op)
+	}
 }
 
 func (g *Game) Layout(outsideWidth, outsideHeight int) (screenWidth, screenHeight int) {
@@ -92,6 +126,7 @@ func main() {
 			Color:  getRandomColor(),
 			Points: 0,
 		},
+		ThrowableSquares: []*ThrowableSquare{},
 	}
 
 	go game.startWsClient()
@@ -105,7 +140,7 @@ func main() {
 	}
 }
 
-func (g *Game) HandleInput() {
+func (g *Game) HandleKeyInput() {
 	hasPlayerMoved := false
 
 	if ebiten.IsKeyPressed(ebiten.KeyW) {
@@ -150,6 +185,41 @@ func (g *Game) HandleInput() {
 
 		g.HandleCollision()
 	}
+}
+
+func (g *Game) HandleMouseInput() {
+	if ebiten.IsMouseButtonPressed(ebiten.MouseButtonLeft) {
+		if g.MouseClickedAt.IsZero() {
+			g.MouseClickedAt = time.Now()
+		}
+
+		diff := time.Now().Sub(g.MouseClickedAt).Seconds()
+
+		if diff < 1.0 {
+			return
+		}
+
+		log.Println("Mouse button pressed")
+
+		g.MouseClickedAt = time.Now()
+		destX, destY := ebiten.CursorPosition()
+		g.ThrowSquare(int(g.PlayerCircle.PosX), int(g.PlayerCircle.PosY), destX, destY)
+	}
+}
+
+func (g *Game) ThrowSquare(sourceX, sourceY, destX, destY int) {
+	throwableSquare := ThrowableSquare{
+		CurrentX: sourceX,
+		CurrentY: sourceY,
+		DestX:    destX,
+		DestY:    destY,
+		Reached:  false,
+		Width:    5,
+		Height:   5,
+		Color:    getRandomColor(),
+	}
+
+	g.ThrowableSquares = append(g.ThrowableSquares, &throwableSquare)
 }
 
 func (g *Game) HandleCollision() {
